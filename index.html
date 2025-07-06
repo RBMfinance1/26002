@@ -359,35 +359,112 @@
     function loadOnlineCSV() {
       document.getElementById("fileStatus").innerHTML = "⏳ Chargement de la base de données en ligne...";
       
-      fetch('https://rbmfinance1.github.io/26002/bdd.csv')
-        .then(response => {
+      // URLs corrigées pour la branche gh-pages
+      const alternativeUrls = [
+        // 1. JSDelivr CDN avec branche gh-pages
+        'https://cdn.jsdelivr.net/gh/rbmfinance1/26002@gh-pages/bdd.csv',
+        
+        // 2. GitHub Raw avec branche gh-pages
+        'https://raw.githubusercontent.com/rbmfinance1/26002/gh-pages/bdd.csv',
+        
+        // 3. URL originale GitHub Pages (qui fonctionne pour le téléchargement)
+        'https://rbmfinance1.github.io/26002/bdd.csv'
+      ];
+      
+      async function tryUrls(urlIndex = 0) {
+        if (urlIndex >= alternativeUrls.length) {
+          console.log('Toutes les sources ont échoué');
+          showManualDownloadOption();
+          return;
+        }
+        
+        const currentUrl = alternativeUrls[urlIndex];
+        console.log(`Tentative ${urlIndex + 1}:`, currentUrl);
+        
+        try {
+          const response = await fetch(currentUrl, {
+            method: 'GET',
+            mode: 'cors',
+            cache: 'no-cache',
+            headers: {
+              'Accept': 'text/csv,text/plain,*/*'
+            }
+          });
+          
           if (!response.ok) {
-            throw new Error('Erreur réseau');
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
           }
-          return response.text();
-        })
-        .then(csvData => {
-          Papa.parse(csvData, {
-            header: false,
-            delimiter: ";",
-            skipEmptyLines: true,
-            complete: results => {
+          
+          const csvData = await response.text();
+          
+          // Vérifier que c'est bien du CSV
+          if (csvData.includes('<!DOCTYPE') || csvData.includes('<html>')) {
+            throw new Error('Contenu HTML reçu au lieu de CSV');
+          }
+          
+          if (csvData.trim().length < 10) {
+            throw new Error('Fichier CSV vide ou trop court');
+          }
+          
+          console.log('✅ Chargement réussi avec:', currentUrl);
+          processCsvData(csvData);
+          
+        } catch (error) {
+          console.log(`Source ${urlIndex + 1} échouée:`, error.message);
+          // Essayer la source suivante
+          tryUrls(urlIndex + 1);
+        }
+      }
+      
+      // Commencer par la première source
+      tryUrls(0);
+    }
+
+    function showManualDownloadOption() {
+      document.getElementById("fileStatus").innerHTML = 
+        `<div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 8px; margin: 10px 0;">
+          <strong>📥 Téléchargement manuel requis</strong><br/><br/>
+          <div style="margin: 10px 0;">
+            <a href="https://rbmfinance1.github.io/26002/bdd.csv" 
+               download="bdd.csv" 
+               style="background: #007bff; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 5px 0;">
+              📥 Télécharger bdd.csv
+            </a>
+          </div>
+          <small style="color: #856404;">
+            1. Cliquez sur le lien ci-dessus pour télécharger<br/>
+            2. Une fois téléchargé, utilisez "📁 Charger fichier local"<br/>
+            3. Sélectionnez le fichier bdd.csv téléchargé
+          </small>
+        </div>`;
+    }
+
+    function processCsvData(csvData) {
+      try {
+        Papa.parse(csvData, {
+          header: false,
+          delimiter: ";",
+          skipEmptyLines: true,
+          complete: results => {
+            if (results.data && results.data.length > 1) {
               database = results.data.slice(1);
               document.getElementById("fileStatus").innerHTML = 
                 `✅ ${database.length} articles chargés depuis la base en ligne`;
-            },
-            error: (error) => {
-              alert("❌ Erreur lors du traitement du fichier CSV");
-              console.error(error);
-              document.getElementById("fileStatus").innerHTML = "❌ Erreur de traitement";
+            } else {
+              throw new Error('Fichier CSV vide ou invalide');
             }
-          });
-        })
-        .catch(error => {
-          alert("❌ Impossible de charger la base de données en ligne");
-          console.error(error);
-          document.getElementById("fileStatus").innerHTML = "❌ Erreur de chargement";
+          },
+          error: (error) => {
+            console.error('Erreur Papa Parse:', error);
+            document.getElementById("fileStatus").innerHTML = 
+              "❌ Erreur lors du traitement du fichier CSV";
+          }
         });
+      } catch (error) {
+        console.error('Erreur de traitement CSV:', error);
+        document.getElementById("fileStatus").innerHTML = 
+          "❌ Erreur lors du traitement des données";
+      }
     }
 
     function findProduct() {
