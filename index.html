@@ -279,8 +279,11 @@
 
     <div class="section">
       <h3>1️⃣ Charger la base de données</h3>
-      <input type="file" id="csvFile" accept=".csv" />
-      <button onclick="loadCSV()">📁 Charger CSV</button>
+      <div class="button-row">
+        <button onclick="loadOnlineCSV()">🌐 Charger BDD en ligne</button>
+        <button onclick="document.getElementById('csvFile').click()">📁 Charger fichier local</button>
+      </div>
+      <input type="file" id="csvFile" accept=".csv" style="display:none;" onchange="loadCSV()" />
       <div id="fileStatus"></div>
     </div>
 
@@ -351,6 +354,40 @@
           console.error(error);
         }
       });
+    }
+
+    function loadOnlineCSV() {
+      document.getElementById("fileStatus").innerHTML = "⏳ Chargement de la base de données en ligne...";
+      
+      fetch('https://rbmfinance1.github.io/26002/bdd.csv')
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Erreur réseau');
+          }
+          return response.text();
+        })
+        .then(csvData => {
+          Papa.parse(csvData, {
+            header: false,
+            delimiter: ";",
+            skipEmptyLines: true,
+            complete: results => {
+              database = results.data.slice(1);
+              document.getElementById("fileStatus").innerHTML = 
+                `✅ ${database.length} articles chargés depuis la base en ligne`;
+            },
+            error: (error) => {
+              alert("❌ Erreur lors du traitement du fichier CSV");
+              console.error(error);
+              document.getElementById("fileStatus").innerHTML = "❌ Erreur de traitement";
+            }
+          });
+        })
+        .catch(error => {
+          alert("❌ Impossible de charger la base de données en ligne");
+          console.error(error);
+          document.getElementById("fileStatus").innerHTML = "❌ Erreur de chargement";
+        });
     }
 
     function findProduct() {
