@@ -243,6 +243,62 @@
       margin: 10px 0;
     }
     
+    #productListContainer {
+      background: #f8f9fa;
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      margin: 15px 0;
+    }
+    
+    #productListContainer h4 {
+      margin: 0 0 10px 0;
+      color: #495057;
+    }
+    
+    #searchInput {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      font-size: 14px;
+    }
+    
+    .product-item {
+      padding: 10px;
+      border-bottom: 1px solid #ddd;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    
+    .product-item:hover {
+      background-color: #e9ecef;
+    }
+    
+    .product-item:last-child {
+      border-bottom: none;
+    }
+    
+    .product-ref {
+      font-weight: bold;
+      color: #667eea;
+      font-size: 1.1em;
+    }
+    
+    .product-details {
+      font-size: 0.9em;
+      color: #666;
+      margin-top: 5px;
+    }
+    
+    .no-results {
+      text-align: center;
+      padding: 20px;
+      color: #6c757d;
+      font-style: italic;
+    }
+    
     @media (max-width: 768px) {
       .container {
         padding: 15px;
@@ -270,6 +326,22 @@
         width: 200px;
         height: 120px;
       }
+      
+      #productList {
+        max-height: 250px !important;
+      }
+      
+      .product-item {
+        padding: 8px;
+      }
+      
+      .product-ref {
+        font-size: 1em;
+      }
+      
+      .product-details {
+        font-size: 0.8em;
+      }
     }
   </style>
 </head>
@@ -293,6 +365,7 @@
       <div class="button-row">
         <button id="scanButton" onclick="startCamera()">📷 Scanner en direct</button>
         <button id="stopButton" onclick="stopCamera()" style="display:none;">⏹️ Arrêter</button>
+        <button onclick="showProductList()">📋 Choisir dans la liste</button>
       </div>
       
       <div id="scannerContainer">
@@ -308,7 +381,14 @@
         <div class="scan-instruction">Placez le code-barres dans le cadre</div>
       </div>
       
-      <label>⌨️ Saisir manuellement :</label>
+      <div id="productListContainer" style="display:none;">
+        <h4>🔍 Rechercher une référence</h4>
+        <input type="text" id="searchInput" placeholder="Rechercher par référence, code, marque..." onkeyup="filterProducts()" />
+        <div id="productList" style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 5px; margin: 10px 0;"></div>
+        <button onclick="hideProductList()" style="background: #6c757d;">❌ Fermer la liste</button>
+      </div>
+      
+      <label>⌨️ Ou saisir manuellement :</label>
       <input type="text" id="barcodeInput" placeholder="Entrer un code EAN..." />
       <button onclick="findProduct()">🔍 Rechercher</button>
     </div>
@@ -582,6 +662,110 @@
       if (confirm("🗑️ Êtes-vous sûr de vouloir vider la liste ?")) {
         selectedItems = [];
         updateSelectedList();
+      }
+    }
+
+    function showProductList() {
+      if (database.length === 0) {
+        alert("⚠️ Veuillez d'abord charger un fichier CSV");
+        return;
+      }
+      
+      document.getElementById('productListContainer').style.display = 'block';
+      document.getElementById('searchInput').value = '';
+      displayProducts(database);
+      
+      // Faire défiler vers la liste
+      document.getElementById('productListContainer').scrollIntoView({ behavior: 'smooth' });
+      
+      // Focus sur le champ de recherche
+      setTimeout(() => {
+        document.getElementById('searchInput').focus();
+      }, 300);
+    }
+
+    function hideProductList() {
+      document.getElementById('productListContainer').style.display = 'none';
+    }
+
+    function displayProducts(products) {
+      const productList = document.getElementById('productList');
+      
+      if (products.length === 0) {
+        productList.innerHTML = '<div class="no-results">Aucun produit trouvé</div>';
+        return;
+      }
+      
+      productList.innerHTML = products.slice(0, 100).map((item, index) => 
+        `<div class="product-item" onclick="selectProduct(${database.indexOf(item)})">
+          <div class="product-ref">${item[COL_REF] || 'N/A'}</div>
+          <div class="product-details">
+            ${item[COL_CODE] || 'N/A'} | ${item[COL_MARQUE] || 'N/A'} | 
+            Taille: ${item[COL_TAILLE] || 'N/A'} | Couleur: ${item[COL_COULEUR] || 'N/A'}
+          </div>
+        </div>`
+      ).join('');
+      
+      if (products.length > 100) {
+        productList.innerHTML += '<div class="no-results">... et ' + (products.length - 100) + ' autres résultats. Affinez votre recherche.</div>';
+      }
+    }
+
+    function filterProducts() {
+      const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+      
+      if (searchTerm === '') {
+        displayProducts(database);
+        return;
+      }
+      
+      const filteredProducts = database.filter(item => {
+        const ref = (item[COL_REF] || '').toLowerCase();
+        const code = (item[COL_CODE] || '').toLowerCase();
+        const marque = (item[COL_MARQUE] || '').toLowerCase();
+        const couleur = (item[COL_COULEUR] || '').toLowerCase();
+        const taille = (item[COL_TAILLE] || '').toLowerCase();
+        const ean = (item[COL_EAN] || '').toLowerCase();
+        
+        return ref.includes(searchTerm) || 
+               code.includes(searchTerm) || 
+               marque.includes(searchTerm) || 
+               couleur.includes(searchTerm) || 
+               taille.includes(searchTerm) ||
+               ean.includes(searchTerm);
+      });
+      
+      displayProducts(filteredProducts);
+    }
+
+    function selectProduct(index) {
+      const selectedItem = database[index];
+      hideProductList();
+      
+      // Afficher le produit sélectionné comme si on l'avait trouvé par EAN
+      const rd = document.getElementById("results");
+      rd.style.display = "block";
+      rd.innerHTML = `
+        <div class="item">
+          <strong>✅ Article sélectionné !</strong><br/><br/>
+          <strong>Réf :</strong> ${selectedItem[COL_REF] || 'N/A'}<br/>
+          <strong>Code Article :</strong> ${selectedItem[COL_CODE] || 'N/A'}<br/>
+          <strong>Marque :</strong> ${selectedItem[COL_MARQUE] || 'N/A'}<br/>
+          <strong>Couleur :</strong> ${selectedItem[COL_COULEUR] || 'N/A'}<br/>
+          <strong>Taille :</strong> ${selectedItem[COL_TAILLE] || 'N/A'}<br/>
+          <strong>EAN :</strong> ${selectedItem[COL_EAN] || 'N/A'}<br/><br/>
+          <button onclick='addToList(${JSON.stringify(selectedItem).replace(/'/g, "&#39;").replace(/"/g, "&quot;")})'>➕ Ajouter à la liste</button>
+        </div>`;
+      
+      // Remplir aussi le champ EAN pour cohérence
+      document.getElementById("barcodeInput").value = selectedItem[COL_EAN] || '';
+      
+      // Faire défiler vers les résultats
+      rd.scrollIntoView({ behavior: 'smooth' });
+      
+      // Vibration si supportée
+      if (navigator.vibrate) {
+        navigator.vibrate(100);
       }
     }
 
