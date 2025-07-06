@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+  <title>Scanner EAN Mobile</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script type="module">
+    import { BrowserMultiFormatReader } from 'https://cdn.jsdelivr.net/npm/@zxing/browser@0.0.10/+esm';
+
+    let codeReader = null;
+    let isScanning = false;
+
+    // Scanner via flux vidéo en temps réel
+    window.startCamera = async function() {
+      const video = document.getElementById('video');
+      const scanButton = document.getElementById('scanButton');
+      const stopButton = document.getElementById('stopButton');
+      
+      try {
+        // Arrêter toute session précédente
+        if (codeReader) {
+          codeReader.reset();
+        }
+        
+        codeReader = new BrowserMultiFormatReader();
+        const constraints = {
+          video: {
+            facingMode: 'environment', // Caméra arrière
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        };
+        
+        await codeReader.decodeFromConstraints(constraints, video, (result, err) => {
+          if (result && isScanning) {
+            document.getElementById("barcodeInput").value = result.text;
+            stopCamera();
+            findProduct();
+            // Vibration si supportée
+            if (navigator.vibrate) {
+              navigator.vibrate(200);
+            }
+          }
+        });
+        
+        isScanning = true;
+        video.style.display = 'block';
+        scanButton.style.display = 'none';
+        stopButton.style.display = 'inline-block';
+        document.getElementById('scannerContainer').style.display = 'block';
+        
+      } catch (err) {
+        console.error('Erreur caméra:', err);
+        alert('Impossible d\'accéder à la caméra. Vérifiez les permissions.');
+        resetCameraButtons();
+      }
+    };
+
+    window.stopCamera = function() {
+      isScanning = false;
+      
+      if (codeReader) {
+        try {
+          codeReader.reset();
+        } catch (e) {
+          console.log('Erreur lors de l\'arrêt de la caméra:', e);
+        }
+        codeReader = null;
+      }
+      
+      resetCameraButtons();
+    };
+
+    function resetCameraButtons() {
+      document.getElementById('video').style.display = 'none';
+      document.getElementById('scanButton').style.display = 'inline-block';
+      document.getElementById('stopButton').style.display = 'none';
+      document.getElementById('scannerContainer').style.display = 'none';
+    }
+  </script>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      margin: 0;
+      padding: 10px;
+      color: #2c3e50;
+      min-height: 100vh;
+    }
+    
+    .container {
+      background: white;
+      padding: 20px;
+      border-radius: 15px;
+      max-width: 100%;
+      margin: auto;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    }
+    
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+      background: linear-gradient(45deg, #667eea, #764ba2);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      font-size: 1.5em;
+    }
+    
+    .section {
+      margin-bottom: 20px;
+      padding: 15px;
+      border: 1px solid #e0e0e0;
+      border-radius: 10px;
+      background: #f8f9fa;
+    }
+    
+    .section h3 {
+      margin: 0 0 15px 0;
+      color: #495057;
+      font-size: 1.1em;
+    }
+    
+    input[type="file"], input[type="text"] {
+      width: 100%;
+      padding: 12px;
+      margin: 8px 0;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      font-size: 16px; /* Évite le zoom sur iOS */
+    }
+    
+    button {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      border: none;
+      color: white;
+      padding: 12px 20px;
+      margin: 5px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 14px;
+      min-height: 44px; /* Taille minimum recommandée pour mobile */
+    }
+    
+    button:active {
+      transform: scale(0.98);
+    }
+    
+    .button-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    
+    .button-row button {
+      flex: 1;
+      min-width: 120px;
+    }
+    
+    #scannerContainer {
+      display: none;
+      text-align: center;
+      margin: 15px 0;
+    }
+    
+    #video {
+      width: 100%;
+      max-width: 400px;
+      height: 300px;
+      border: 2px solid #667eea;
+      border-radius: 10px;
+      object-fit: cover;
+    }
+    
+    .scanner-overlay {
+      position: relative;
+      display: inline-block;
+    }
+    
+    .scanner-frame {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 250px;
+      height: 150px;
+      border: 2px solid #00ff00;
+      border-radius: 10px;
+      pointer-events: none;
+    }
+    
+    .scanner-corners {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border: 3px solid #00ff00;
+    }
+    
+    .corner-tl { top: -2px; left: -2px; border-right: none; border-bottom: none; }
+    .corner-tr { top: -2px; right: -2px; border-left: none; border-bottom: none; }
+    .corner-bl { bottom: -2px; left: -2px; border-right: none; border-top: none; }
+    .corner-br { bottom: -2px; right: -2px; border-left: none; border-top: none; }
+    
+    #results, #selectedList {
+      margin-top: 15px;
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      background: #f8f9fa;
+    }
+    
+    .item {
+      padding: 12px;
+      border-bottom: 1px solid #ccc;
+      line-height: 1.4;
+    }
+    
+    .item:last-child {
+      border-bottom: none;
+    }
+    
+    .item strong {
+      color: #667eea;
+      font-size: 1.1em;
+    }
+    
+    #fileStatus {
+      color: #28a745;
+      font-weight: bold;
+      margin: 10px 0;
+    }
+    
+    .scan-instruction {
+      text-align: center;
+      color: #666;
+      font-size: 0.9em;
+      margin: 10px 0;
+    }
+    
+    @media (max-width: 768px) {
+      .container {
+        padding: 15px;
+        margin: 5px;
+      }
+      
+      h1 {
+        font-size: 1.3em;
+      }
+      
+      .section {
+        padding: 12px;
+      }
+      
+      button {
+        padding: 10px 15px;
+        font-size: 13px;
+      }
+      
+      #video {
+        height: 250px;
+      }
+      
+      .scanner-frame {
+        width: 200px;
+        height: 120px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📱 Scanner EAN Mobile</h1>
+
+    <div class="section">
+      <h3>1️⃣ Charger la base de données</h3>
+      <input type="file" id="csvFile" accept=".csv" />
+      <button onclick="loadCSV()">📁 Charger CSV</button>
+      <div id="fileStatus"></div>
+    </div>
+
+    <div class="section">
+      <h3>2️⃣ Scanner un code-barres</h3>
+      
+      <div class="button-row">
+        <button id="scanButton" onclick="startCamera()">📷 Scanner en direct</button>
+        <button id="stopButton" onclick="stopCamera()" style="display:none;">⏹️ Arrêter</button>
+      </div>
+      
+      <div id="scannerContainer">
+        <div class="scanner-overlay">
+          <video id="video" playsinline></video>
+          <div class="scanner-frame">
+            <div class="scanner-corners corner-tl"></div>
+            <div class="scanner-corners corner-tr"></div>
+            <div class="scanner-corners corner-bl"></div>
+            <div class="scanner-corners corner-br"></div>
+          </div>
+        </div>
+        <div class="scan-instruction">Placez le code-barres dans le cadre</div>
+      </div>
+      
+      <label>⌨️ Saisir manuellement :</label>
+      <input type="text" id="barcodeInput" placeholder="Entrer un code EAN..." />
+      <button onclick="findProduct()">🔍 Rechercher</button>
+    </div>
+
+    <div id="results" style="display:none;"></div>
+
+    <div class="section">
+      <h3>📋 Références sélectionnées</h3>
+      <div id="selectedList">Aucune référence sélectionnée</div>
+      <div class="button-row">
+        <button onclick="exportPDF()">📄 Exporter PDF</button>
+        <button onclick="clearList()" style="background: #dc3545;">🗑️ Vider la liste</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let database = [];
+    let selectedItems = [];
+
+    const COL_REF = 0;
+    const COL_CODE = 1;
+    const COL_COULEUR = 2;
+    const COL_TAILLE = 4;
+    const COL_MARQUE = 7;
+    const COL_EAN = 10;
+
+    function loadCSV() {
+      const file = document.getElementById('csvFile').files[0];
+      if (!file) return alert("⚠️ Sélectionnez un fichier CSV.");
+      
+      Papa.parse(file, {
+        header: false,
+        delimiter: ";",
+        skipEmptyLines: true,
+        complete: results => {
+          database = results.data.slice(1);
+          document.getElementById("fileStatus").innerHTML = 
+            `✅ ${database.length} articles chargés avec succès`;
+        },
+        error: (error) => {
+          alert("❌ Erreur lors du chargement du fichier CSV");
+          console.error(error);
+        }
+      });
+    }
+
+    function findProduct() {
+      const code = document.getElementById("barcodeInput").value.trim();
+      if (!code) {
+        alert("⚠️ Veuillez entrer un code EAN");
+        return;
+      }
+      
+      if (database.length === 0) {
+        alert("⚠️ Veuillez d'abord charger un fichier CSV");
+        return;
+      }
+      
+      const result = database.find(row => row[COL_EAN] === code);
+      const rd = document.getElementById("results");
+
+      if (result) {
+        rd.style.display = "block";
+        rd.innerHTML = `
+          <div class="item">
+            <strong>✅ Article trouvé !</strong><br/><br/>
+            <strong>Réf :</strong> ${result[COL_REF] || 'N/A'}<br/>
+            <strong>Code Article :</strong> ${result[COL_CODE] || 'N/A'}<br/>
+            <strong>Marque :</strong> ${result[COL_MARQUE] || 'N/A'}<br/>
+            <strong>Couleur :</strong> ${result[COL_COULEUR] || 'N/A'}<br/>
+            <strong>Taille :</strong> ${result[COL_TAILLE] || 'N/A'}<br/>
+            <strong>EAN :</strong> ${result[COL_EAN] || 'N/A'}<br/><br/>
+            <button onclick='addToList(${JSON.stringify(result).replace(/'/g, "&#39;").replace(/"/g, "&quot;")})'>➕ Ajouter à la liste</button>
+          </div>`;
+      } else {
+        rd.style.display = "block";
+        rd.innerHTML = `
+          <div class="item">
+            <strong>❌ Aucun article trouvé</strong><br/>
+            Code EAN recherché : <strong>${code}</strong><br/>
+            Vérifiez le code ou la base de données.<br/><br/>
+            <button onclick="startCamera()">📷 Essayer avec la caméra</button>
+          </div>`;
+      }
+      
+      // Faire défiler vers les résultats
+      rd.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function addToList(item) {
+      // Vérifier si l'item existe déjà
+      const exists = selectedItems.some(existing => existing[COL_EAN] === item[COL_EAN]);
+      
+      if (exists) {
+        alert("⚠️ Cet article est déjà dans la liste");
+        return;
+      }
+      
+      selectedItems.push(item);
+      updateSelectedList();
+      
+      // Feedback visuel
+      if (navigator.vibrate) {
+        navigator.vibrate(100);
+      }
+      
+      // Vider le champ de saisie et masquer les résultats pour préparer le prochain scan
+      document.getElementById("barcodeInput").value = "";
+      document.getElementById("results").style.display = "none";
+      
+      // Afficher un message de confirmation avec option de nouveau scan
+      const confirmDiv = document.createElement('div');
+      confirmDiv.innerHTML = `
+        <div style="background: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 10px; border-radius: 5px; margin: 10px 0; text-align: center;">
+          ✅ Article ajouté avec succès !<br/>
+          <button onclick="startCamera(); this.parentElement.parentElement.remove();" style="margin-top: 10px;">📷 Scanner un autre article</button>
+          <button onclick="this.parentElement.parentElement.remove();" style="margin-top: 10px; background: #6c757d;">❌ Fermer</button>
+        </div>
+      `;
+      
+      // Insérer le message après la section de scan
+      const scanSection = document.querySelector('.section:nth-child(2)');
+      scanSection.parentNode.insertBefore(confirmDiv, scanSection.nextSibling);
+      
+      // Supprimer automatiquement le message après 5 secondes
+      setTimeout(() => {
+        if (confirmDiv.parentNode) {
+          confirmDiv.remove();
+        }
+      }, 5000);
+    }
+
+    function updateSelectedList() {
+      const listContainer = document.getElementById("selectedList");
+      
+      if (selectedItems.length === 0) {
+        listContainer.innerHTML = "Aucune référence sélectionnée";
+        return;
+      }
+      
+      listContainer.innerHTML = selectedItems.map((el, index) =>
+        `<div class="item">
+          <strong>${el[COL_REF] || 'N/A'}</strong> – ${el[COL_CODE] || 'N/A'}<br/>
+          Taille: ${el[COL_TAILLE] || 'N/A'} | Marque: ${el[COL_MARQUE] || 'N/A'}<br/>
+          <small>EAN: ${el[COL_EAN] || 'N/A'}</small>
+          <button onclick="removeFromList(${index})" style="background: #dc3545; padding: 5px 10px; font-size: 12px;">🗑️ Supprimer</button>
+        </div>`
+      ).join("");
+    }
+
+    function removeFromList(index) {
+      selectedItems.splice(index, 1);
+      updateSelectedList();
+    }
+
+    function clearList() {
+      if (selectedItems.length === 0) return;
+      
+      if (confirm("🗑️ Êtes-vous sûr de vouloir vider la liste ?")) {
+        selectedItems = [];
+        updateSelectedList();
+      }
+    }
+
+    function exportPDF() {
+      if (selectedItems.length === 0) {
+        alert("⚠️ Aucune référence à exporter");
+        return;
+      }
+      
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      doc.setFont("helvetica", "normal");
+      const now = new Date();
+      const timestamp = now.toLocaleString("fr-FR");
+      const marginLeft = 20;
+      let y = 30;
+
+      // En-tête
+      doc.setFontSize(10);
+      doc.text(`Date : ${timestamp}`, 10, 10);
+      doc.text(`Nombre d'articles : ${selectedItems.length}`, 10, 15);
+
+      doc.setFontSize(16);
+      doc.text("Liste de colisage", marginLeft, 25);
+
+      // Contenu
+      doc.setFontSize(10);
+      selectedItems.forEach((item, i) => {
+        const text = `${i + 1}. ${item[COL_REF]} | ${item[COL_CODE]} | Taille: ${item[COL_TAILLE]} | Marque: ${item[COL_MARQUE]}`;
+        const lines = doc.splitTextToSize(text, 170);
+        
+        // Nouvelle page si nécessaire
+        if (y + (lines.length * 5) > 270) {
+          doc.addPage();
+          y = 20;
+        }
+        
+        doc.text(lines, marginLeft, y);
+        y += lines.length * 5 + 3;
+      });
+
+      doc.save(`colisage_${new Date().toISOString().slice(0,10)}.pdf`);
+    }
+
+    // Gérer la saisie manuelle avec Enter
+    document.addEventListener('DOMContentLoaded', function() {
+      const barcodeInput = document.getElementById('barcodeInput');
+      if (barcodeInput) {
+        barcodeInput.addEventListener('keypress', function(e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            findProduct();
+          }
+        });
+      }
+    });
+
+    // Empêcher le zoom sur double-tap (iOS)
+    let lastTouchEnd = 0;
+    document.addEventListener('touchend', function (event) {
+      const now = (new Date()).getTime();
+      if (now - lastTouchEnd <= 300) {
+        event.preventDefault();
+      }
+      lastTouchEnd = now;
+    }, false);
+  </script>
+</body>
+</html>
