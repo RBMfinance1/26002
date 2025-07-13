@@ -1,2 +1,2 @@
 # 26002
-Liste colisage
+Liste colisage simple
