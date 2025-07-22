@@ -194,7 +194,15 @@
       border: 2px solid #00ff00;
       border-radius: 10px;
       pointer-events: none;
+    }
+    
+    .scanner-frame.active {
       animation: pulse 2s infinite;
+    }
+    
+    .scanner-frame.success {
+      border-color: #28a745;
+      animation: none;
     }
     
     @keyframes pulse {
@@ -649,6 +657,7 @@
       <div class="button-row">
         <button id="scanButton" onclick="startCamera()">📷 Scanner en direct</button>
         <button id="stopButton" onclick="stopCamera()" style="display:none;">⏹️ Arrêter</button>
+        <button id="nextScanButton" onclick="startNextScan()" style="display:none; background: #28a745;">📷 Scanner suivant</button>
         <button onclick="showProductList()">📋 Choisir dans la liste</button>
         <button onclick="runDiagnostics()" style="background: #17a2b8;">🔧 Diagnostic</button>
       </div>
@@ -659,14 +668,17 @@
       <div id="scannerContainer">
         <div class="scanner-overlay">
           <video id="video" playsinline></video>
-          <div class="scanner-frame">
+          <div id="scannerFrame" class="scanner-frame">
             <div class="scanner-corners corner-tl"></div>
             <div class="scanner-corners corner-tr"></div>
             <div class="scanner-corners corner-bl"></div>
             <div class="scanner-corners corner-br"></div>
           </div>
         </div>
-        <div class="scan-instruction">Placez le code-barres dans le cadre vert</div>
+        <div class="scan-instruction">
+          <div style="font-weight: bold; color: #28a745;">📱 Placez le code-barres dans le cadre vert</div>
+          <div style="font-size: 0.8em; margin-top: 5px;">Le cadre clignote pendant la recherche, devient fixe quand trouvé</div>
+        </div>
       </div>
       
       <div id="productListContainer" style="display:none;">
@@ -1104,6 +1116,12 @@
     function startScanning() {
       if (!isScanning || !codeReader) return;
       
+      // Activer l'animation du cadre
+      const scannerFrame = document.getElementById('scannerFrame');
+      if (scannerFrame) {
+        scannerFrame.className = 'scanner-frame active';
+      }
+      
       // Méthode robuste de scan avec fallback
       scanningInterval = setInterval(async () => {
         if (!isScanning || !currentStream) {
@@ -1115,7 +1133,6 @@
           const video = document.getElementById('video');
           if (video.readyState === video.HAVE_ENOUGH_DATA) {
             
-            // Utiliser decodeFromVideoDevice si disponible, sinon decodeOnceFromVideoDevice
             let result = null;
             
             if (codeReader.decodeFromVideoDevice) {
@@ -1138,10 +1155,18 @@
               console.log('✅ Code détecté:', result.text);
               addDebugInfo('🎯 Code détecté: ' + result.text);
               
+              // Arrêter l'animation et changer la couleur
+              if (scannerFrame) {
+                scannerFrame.className = 'scanner-frame success';
+              }
+              
               document.getElementById("barcodeInput").value = result.text;
               
-              await stopCamera();
-              findProduct();
+              // Attendre un peu pour montrer le succès
+              setTimeout(async () => {
+                await stopCameraAfterScan();
+                findProduct();
+              }, 500);
               
               // Feedback
               if (navigator.vibrate) {
@@ -1162,8 +1187,8 @@
       }, 250); // Scan toutes les 250ms pour économiser les ressources
     }
 
-    async function stopCamera() {
-      console.log('🛑 Arrêt de la caméra...');
+    async function stopCameraAfterScan() {
+      console.log('🎯 Arrêt caméra après scan réussi');
       
       isScanning = false;
       
@@ -1173,13 +1198,92 @@
         scanningInterval = null;
       }
       
-      // Arrêter le stream
+      // Garder le stream et le reader pour le prochain scan
+      // Ne PAS arrêter currentStream ici
+      
+      // Réinitialiser l'interface partiellement
+      document.getElementById('scanButton').style.display = 'none';
+      document.getElementById('stopButton').style.display = 'none';
+      document.getElementById('nextScanButton').style.display = 'inline-block';
+      
+      // Masquer la vidéo mais garder le scanner container
+      document.getElementById('video').style.display = 'none';
+      
+      // Réinitialiser le cadre
+      const scannerFrame = document.getElementById('scannerFrame');
+      if (scannerFrame) {
+        scannerFrame.className = 'scanner-frame';
+      }
+    }
+
+    async function startNextScan() {
+      console.log('🔄 Démarrage scan suivant');
+      
+      try {
+        const video = document.getElementById('video');
+        
+        // Si on a déjà un stream, le réutiliser
+        if (currentStream && video) {
+          video.style.display = 'block';
+          
+          // Réinitialiser le reader si nécessaire
+          if (!codeReader) {
+            codeReader = new window.ZXing.BrowserMultiFormatReader();
+            // Réappliquer les hints si disponibles
+            const hints = new Map();
+            if (window.ZXing.DecodeHintType?.TRY_HARDER) {
+              hints.set(window.ZXing.DecodeHintType.TRY_HARDER, true);
+            }
+            if (hints.size > 0) {
+              try {
+                codeReader.setHints(hints);
+              } catch (e) {
+                console.log('Hints non appliqués:', e);
+              }
+            }
+          }
+          
+          isScanning = true;
+          startScanning();
+          
+          // Interface
+          document.getElementById('nextScanButton').style.display = 'none';
+          document.getElementById('stopButton').style.display = 'inline-block';
+          
+          showScannerStatus('🔍 Prêt pour le scan suivant', 'success');
+          addDebugInfo('🔄 Scanner redémarré pour scan suivant');
+          
+        } else {
+          // Si plus de stream, redémarrer complètement
+          await startCamera();
+        }
+        
+      } catch (error) {
+        console.error('Erreur redémarrage scan:', error);
+        addDebugInfo('❌ Erreur redémarrage: ' + error.message);
+        // Fallback: redémarrage complet
+        await startCamera();
+      }
+    }
+
+    async function stopCamera() {
+      console.log('🛑 Arrêt complet de la caméra...');
+      
+      isScanning = false;
+      
+      // Arrêter l'interval de scan
+      if (scanningInterval) {
+        clearInterval(scanningInterval);
+        scanningInterval = null;
+      }
+      
+      // Arrêter complètement le stream
       if (currentStream) {
         currentStream.getTracks().forEach(track => {
           track.stop();
         });
         currentStream = null;
-        addDebugInfo('🔴 Stream vidéo arrêté');
+        addDebugInfo('🔴 Stream vidéo complètement arrêté');
       }
       
       // Nettoyer ZXing
@@ -1192,18 +1296,25 @@
         codeReader = null;
       }
       
-      // Réinitialiser l'interface
+      // Réinitialiser complètement l'interface
       const video = document.getElementById('video');
       video.srcObject = null;
       video.style.display = 'none';
       
       document.getElementById('scanButton').style.display = 'inline-block';
       document.getElementById('stopButton').style.display = 'none';
+      document.getElementById('nextScanButton').style.display = 'none';
       document.getElementById('scannerContainer').style.display = 'none';
+      
+      // Réinitialiser le cadre
+      const scannerFrame = document.getElementById('scannerFrame');
+      if (scannerFrame) {
+        scannerFrame.className = 'scanner-frame';
+      }
       
       // Masquer le statut actif
       const statusDiv = document.getElementById('scannerStatus');
-      if (statusDiv.textContent.includes('Scanner actif')) {
+      if (statusDiv.textContent.includes('Scanner actif') || statusDiv.textContent.includes('Prêt pour')) {
         statusDiv.style.display = 'none';
       }
     }
