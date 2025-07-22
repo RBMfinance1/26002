@@ -651,19 +651,17 @@
     <div class="section">
       <h3>2️⃣ Scanner un code-barres</h3>
       
-      <!-- Statut du scanner avec plus de détails -->
-      <div id="scannerStatus" class="scanner-status" style="display: none;"></div>
+      <!-- Statut du scanner (diagnostic supprimé, mais statut conservé pour messages scan) -->
       
       <div class="button-row">
         <button id="scanButton" onclick="startCamera()">📷 Scanner en direct</button>
         <button id="stopButton" onclick="stopCamera()" style="display:none;">⏹️ Arrêter</button>
         <button id="nextScanButton" onclick="startNextScan()" style="display:none; background: #28a745;">📷 Scanner suivant</button>
         <button onclick="showProductList()">📋 Choisir dans la liste</button>
-        <button onclick="runDiagnostics()" style="background: #17a2b8;">🔧 Diagnostic</button>
+        <!-- Bouton diagnostic supprimé -->
       </div>
       
-      <!-- Zone de debug (masquée par défaut) -->
-      <div id="debugInfo" class="debug-info" style="display: none;"></div>
+      <!-- Zone de debug supprimée -->
       
       <div id="scannerContainer">
         <div class="scanner-overlay">
@@ -860,104 +858,13 @@
     const COL_EAN = 5;
 
     // === FONCTIONS DE DIAGNOSTIC AMÉLIORÉES ===
-    
-    function showScannerStatus(message, type = 'loading', duration = 0) {
-      const statusDiv = document.getElementById('scannerStatus');
-      statusDiv.style.display = 'block';
-      statusDiv.textContent = message;
-      statusDiv.className = `scanner-status ${type}`;
-      
-      if (duration > 0) {
-        setTimeout(() => {
-          statusDiv.style.display = 'none';
-        }, duration);
-      }
-    }
-    
-    function addDebugInfo(info) {
-      const debugDiv = document.getElementById('debugInfo');
-      debugDiv.style.display = 'block';
-      debugDiv.innerHTML += info + '<br/>';
-      console.log('🔍 DEBUG:', info);
-    }
-    
-    function clearDebugInfo() {
-      const debugDiv = document.getElementById('debugInfo');
-      debugDiv.innerHTML = '';
-      debugDiv.style.display = 'none';
-    }
-
-    function runDiagnostics() {
-      clearDebugInfo();
-      showScannerStatus('🧪 Diagnostic en cours...', 'loading');
-      
-      // Test 1: Protocole
-      const isSecure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-      addDebugInfo(`🔒 HTTPS: ${isSecure ? '✅' : '❌'} (${location.protocol})`);
-      
-      // Test 2: MediaDevices
-      const hasMediaDevices = !!navigator.mediaDevices;
-      addDebugInfo(`📷 MediaDevices: ${hasMediaDevices ? '✅' : '❌'}`);
-      
-      // Test 3: getUserMedia
-      const hasGetUserMedia = !!navigator.mediaDevices?.getUserMedia;
-      addDebugInfo(`🎥 getUserMedia: ${hasGetUserMedia ? '✅' : '❌'}`);
-      
-      // Test 4: ZXing
-      const hasZXing = !!window.ZXing;
-      addDebugInfo(`📚 ZXing Library: ${hasZXing ? '✅' : '❌'} (Loaded: ${window.ZXingLoaded})`);
-      
-      if (window.ZXingError) {
-        addDebugInfo(`❌ ZXing Error: ${window.ZXingError}`);
-      }
-      
-      if (hasZXing) {
-        const hasBrowserReader = !!window.ZXing.BrowserMultiFormatReader;
-        addDebugInfo(`🔧 BrowserMultiFormatReader: ${hasBrowserReader ? '✅' : '❌'}`);
-        
-        const hasBarcodeFormat = !!window.ZXing.BarcodeFormat;
-        addDebugInfo(`📊 BarcodeFormat: ${hasBarcodeFormat ? '✅' : '❌'}`);
-        
-        // Test de création
-        try {
-          const testReader = new window.ZXing.BrowserMultiFormatReader();
-          addDebugInfo(`🏗️ Reader Creation: ✅`);
-          testReader.reset();
-        } catch (error) {
-          addDebugInfo(`🏗️ Reader Creation: ❌ ${error.message}`);
-        }
-      }
-      
-      // Test 5: Caméras disponibles
-      if (hasMediaDevices) {
-        navigator.mediaDevices.enumerateDevices()
-          .then(devices => {
-            const cameras = devices.filter(device => device.kind === 'videoinput');
-            addDebugInfo(`📹 Caméras: ${cameras.length} trouvée(s)`);
-            cameras.forEach((camera, index) => {
-              addDebugInfo(`   ${index + 1}. ${camera.label || 'Caméra sans nom'}`);
-            });
-          })
-          .catch(error => {
-            addDebugInfo(`📹 Erreur énumération: ${error.message}`);
-          });
-      }
-      
-      // Test 6: Navigateur
-      addDebugInfo(`🌐 User Agent: ${navigator.userAgent.substring(0, 50)}...`);
-      
-      setTimeout(() => {
-        showScannerStatus('🔧 Diagnostic terminé - Vérifiez les détails ci-dessous', 'success', 5000);
-      }, 1000);
-    }
+    // Fonctions de diagnostic supprimées
 
     // === SCANNER AVEC GESTION D'ERREUR ROBUSTE ===
     
     async function checkCameraSupport() {
       // Attendre que ZXing soit chargé
       if (!window.ZXingLoaded) {
-        addDebugInfo('⏳ Attente du chargement de ZXing...');
-        
         // Attendre jusqu'à 10 secondes
         for (let i = 0; i < 50; i++) {
           await new Promise(resolve => setTimeout(resolve, 200));
@@ -968,20 +875,19 @@
       // Vérifier HTTPS
       const isSecureContext = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
       if (!isSecureContext) {
-        showScannerStatus('❌ HTTPS requis pour utiliser la caméra', 'error');
+        // showScannerStatus('❌ HTTPS requis pour utiliser la caméra', 'error'); // Diagnostic supprimé
         return false;
       }
 
       // Vérifier MediaDevices
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        showScannerStatus('❌ Caméra non supportée par ce navigateur', 'error');
+        // showScannerStatus('❌ Caméra non supportée par ce navigateur', 'error'); // Diagnostic supprimé
         return false;
       }
 
       // Vérifier ZXing
       if (!window.ZXing || !window.ZXing.BrowserMultiFormatReader) {
-        showScannerStatus('❌ Bibliothèque de scan non chargée - Cliquez sur Diagnostic', 'error');
-        addDebugInfo(`ZXing status: window.ZXing=${!!window.ZXing}, BrowserReader=${!!window.ZXing?.BrowserMultiFormatReader}`);
+        // showScannerStatus('❌ Bibliothèque de scan non chargée - Cliquez sur Diagnostic', 'error'); // Diagnostic supprimé
         return false;
       }
 
@@ -990,7 +896,6 @@
 
     async function startCamera() {
       console.log('🎥 Démarrage de la caméra...');
-      clearDebugInfo();
       
       if (!(await checkCameraSupport())) {
         return;
@@ -1002,7 +907,7 @@
       
       try {
         scanButton.disabled = true;
-        showScannerStatus('📷 Demande d\'accès à la caméra...', 'loading');
+        // showScannerStatus('�� Demande d\'accès à la caméra...', 'loading'); // Diagnostic supprimé
         
         // Arrêter toute session précédente
         await stopCamera();
@@ -1016,14 +921,14 @@
           }
         };
         
-        addDebugInfo('📱 Demande accès caméra avec contraintes optimisées');
+        // addDebugInfo('�� Demande accès caméra avec contraintes optimisées'); // Diagnostic supprimé
         currentStream = await navigator.mediaDevices.getUserMedia(constraints);
         
         video.srcObject = currentStream;
         await video.play();
         
-        addDebugInfo('✅ Caméra démarrée, initialisation scanner...');
-        showScannerStatus('🔧 Initialisation du scanner...', 'loading');
+        // addDebugInfo('✅ Caméra démarrée, initialisation scanner...'); // Diagnostic supprimé
+        // showScannerStatus('🔧 Initialisation du scanner...', 'loading'); // Diagnostic supprimé
         
         // Initialisation ZXing avec gestion d'erreur robuste
         try {
@@ -1055,9 +960,9 @@
           if (hints.size > 0) {
             try {
               codeReader.setHints(hints);
-              addDebugInfo('⚙️ Configuration scanner appliquée');
+              // addDebugInfo('⚙️ Configuration scanner appliquée'); // Diagnostic supprimé
             } catch (hintError) {
-              addDebugInfo('⚠️ Erreur configuration (continuons sans): ' + hintError.message);
+              // addDebugInfo('⚠️ Erreur configuration (continuons sans): ' + hintError.message); // Diagnostic supprimé
             }
           }
           
@@ -1072,13 +977,13 @@
           stopButton.style.display = 'inline-block';
           document.getElementById('scannerContainer').style.display = 'block';
           
-          showScannerStatus('✅ Scanner actif - Placez le code-barres dans le cadre', 'success');
-          addDebugInfo('🔍 Scan en cours...');
+          // showScannerStatus('✅ Scanner actif - Placez le code-barres dans le cadre', 'success'); // Diagnostic supprimé
+          // addDebugInfo('🔍 Scan en cours...'); // Diagnostic supprimé
           
         } catch (zxingError) {
           console.error('Erreur ZXing:', zxingError);
-          addDebugInfo('❌ Erreur ZXing: ' + zxingError.message);
-          showScannerStatus('❌ Erreur d\'initialisation du scanner', 'error');
+          // addDebugInfo('❌ Erreur ZXing: ' + zxingError.message); // Diagnostic supprimé
+          // showScannerStatus('❌ Erreur d\'initialisation du scanner', 'error'); // Diagnostic supprimé
           await stopCamera();
         }
         
@@ -1104,8 +1009,8 @@
             errorMessage += error.message || 'Erreur inconnue';
         }
         
-        showScannerStatus(errorMessage, 'error');
-        addDebugInfo('❌ ' + error.name + ': ' + error.message);
+        // showScannerStatus(errorMessage, 'error'); // Diagnostic supprimé
+        // addDebugInfo('❌ ' + error.name + ': ' + error.message); // Diagnostic supprimé
         await stopCamera();
         
       } finally {
@@ -1153,7 +1058,6 @@
             
             if (result && result.text && isScanning) {
               console.log('✅ Code détecté:', result.text);
-              addDebugInfo('🎯 Code détecté: ' + result.text);
               
               // Arrêter l'animation et changer la couleur
               if (scannerFrame) {
@@ -1180,7 +1084,7 @@
                 navigator.vibrate([200, 100, 200]);
               }
               
-              showScannerStatus('✅ Code-barres détecté avec succès !', 'success', 3000);
+              // showScannerStatus('✅ Code-barres détecté avec succès !', 'success', 3000); // Diagnostic supprimé
               return;
             }
           }
@@ -1188,7 +1092,7 @@
           // Erreurs de scan normales, ne pas afficher
           if (!scanError.message.includes('NotFoundException') && 
               !scanError.message.includes('No MultiFormat Readers')) {
-            addDebugInfo('⚠️ Erreur scan: ' + scanError.message);
+            // addDebugInfo('⚠️ Erreur scan: ' + scanError.message); // Diagnostic supprimé
           }
         }
       }, 250); // Scan toutes les 250ms pour économiser les ressources
@@ -1257,8 +1161,8 @@
           document.getElementById('nextScanButton').style.display = 'none';
           document.getElementById('stopButton').style.display = 'inline-block';
           
-          showScannerStatus('🔍 Prêt pour le scan suivant', 'success');
-          addDebugInfo('🔄 Scanner redémarré pour scan suivant');
+          // showScannerStatus('🔍 Prêt pour le scan suivant', 'success'); // Diagnostic supprimé
+          // addDebugInfo('🔄 Scanner redémarré pour scan suivant'); // Diagnostic supprimé
           
         } else {
           // Si plus de stream, redémarrer complètement
@@ -1267,7 +1171,7 @@
         
       } catch (error) {
         console.error('Erreur redémarrage scan:', error);
-        addDebugInfo('❌ Erreur redémarrage: ' + error.message);
+        // addDebugInfo('❌ Erreur redémarrage: ' + error.message); // Diagnostic supprimé
         // Fallback: redémarrage complet
         await startCamera();
       }
@@ -1290,7 +1194,7 @@
           track.stop();
         });
         currentStream = null;
-        addDebugInfo('🔴 Stream vidéo complètement arrêté');
+        // addDebugInfo('🔴 Stream vidéo complètement arrêté'); // Diagnostic supprimé
       }
       
       // Nettoyer ZXing
