@@ -3,83 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
-  <title>Scanner EAN Mobile</title>
+  <title>EAN Follow-up samples</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script type="module">
-    import { BrowserMultiFormatReader } from 'https://cdn.jsdelivr.net/npm/@zxing/browser@0.0.10/+esm';
-
-    let codeReader = null;
-    let isScanning = false;
-
-    // Scanner via flux vidéo en temps réel
-    window.startCamera = async function() {
-      const video = document.getElementById('video');
-      const scanButton = document.getElementById('scanButton');
-      const stopButton = document.getElementById('stopButton');
-      
-      try {
-        // Arrêter toute session précédente
-        if (codeReader) {
-          codeReader.reset();
-        }
-        
-        codeReader = new BrowserMultiFormatReader();
-        const constraints = {
-          video: {
-            facingMode: 'environment', // Caméra arrière
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          }
-        };
-        
-        await codeReader.decodeFromConstraints(constraints, video, (result, err) => {
-          if (result && isScanning) {
-            document.getElementById("barcodeInput").value = result.text;
-            stopCamera();
-            findProduct();
-            // Vibration si supportée
-            if (navigator.vibrate) {
-              navigator.vibrate(200);
-            }
-          }
-        });
-        
-        isScanning = true;
-        video.style.display = 'block';
-        scanButton.style.display = 'none';
-        stopButton.style.display = 'inline-block';
-        document.getElementById('scannerContainer').style.display = 'block';
-        
-      } catch (err) {
-        console.error('Erreur caméra:', err);
-        alert('Impossible d\'accéder à la caméra. Vérifiez les permissions.');
-        resetCameraButtons();
-      }
-    };
-
-    window.stopCamera = function() {
-      isScanning = false;
-      
-      if (codeReader) {
-        try {
-          codeReader.reset();
-        } catch (e) {
-          console.log('Erreur lors de l\'arrêt de la caméra:', e);
-        }
-        codeReader = null;
-      }
-      
-      resetCameraButtons();
-    };
-
-    function resetCameraButtons() {
-      document.getElementById('video').style.display = 'none';
-      document.getElementById('scanButton').style.display = 'inline-block';
-      document.getElementById('stopButton').style.display = 'none';
-      document.getElementById('scannerContainer').style.display = 'none';
-    }
-  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  
+  <!-- CORRECTION 1: Utiliser la version UMD au lieu de ES6 modules -->
+  <script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
+  
   <style>
     * {
       box-sizing: border-box;
@@ -87,7 +18,7 @@
     
     body {
       font-family: 'Segoe UI', sans-serif;
-      background: linear-gradient(135deg, #667eea, #764ba2);
+      background: white;
       margin: 0;
       padding: 10px;
       color: #2c3e50;
@@ -126,13 +57,18 @@
       font-size: 1.1em;
     }
     
-    input[type="file"], input[type="text"] {
+    input[type="file"], input[type="text"], select, textarea {
       width: 100%;
       padding: 12px;
       margin: 8px 0;
       border-radius: 8px;
       border: 1px solid #ccc;
       font-size: 16px; /* Évite le zoom sur iOS */
+    }
+    
+    textarea {
+      min-height: 60px;
+      resize: vertical;
     }
     
     button {
@@ -152,6 +88,11 @@
       transform: scale(0.98);
     }
     
+    button:disabled {
+      background: #6c757d;
+      cursor: not-allowed;
+    }
+    
     .button-row {
       display: flex;
       gap: 10px;
@@ -161,6 +102,18 @@
     .button-row button {
       flex: 1;
       min-width: 120px;
+    }
+    
+    .export-buttons {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 15px;
+    }
+    
+    .export-buttons button {
+      flex: 1;
+      min-width: 140px;
     }
     
     #scannerContainer {
@@ -228,6 +181,94 @@
     .item strong {
       color: #667eea;
       font-size: 1.1em;
+    }
+    
+    /* NOUVEAU: Statut du scanner */
+    .scanner-status {
+      background: #e8f4fd;
+      border: 1px solid #667eea;
+      border-radius: 8px;
+      padding: 10px;
+      margin: 10px 0;
+      text-align: center;
+      font-size: 0.9em;
+    }
+    
+    .scanner-status.error {
+      background: #f8d7da;
+      border-color: #dc3545;
+      color: #721c24;
+    }
+    
+    .scanner-status.success {
+      background: #d4edda;
+      border-color: #28a745;
+      color: #155724;
+    }
+    
+    /* Formulaire d'ajout d'informations */
+    #addInfoForm {
+      background: #e8f4fd;
+      border: 2px solid #667eea;
+      border-radius: 10px;
+      padding: 20px;
+      margin: 20px 0;
+      display: none;
+    }
+    
+    .form-row {
+      display: flex;
+      gap: 15px;
+      margin-bottom: 15px;
+      flex-wrap: wrap;
+    }
+    
+    .form-group {
+      flex: 1;
+      min-width: 200px;
+    }
+    
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+      color: #495057;
+    }
+    
+    .radio-group {
+      display: flex;
+      gap: 15px;
+      margin-top: 5px;
+    }
+    
+    .radio-group label {
+      display: flex;
+      align-items: center;
+      font-weight: normal;
+      margin-bottom: 0;
+    }
+    
+    .radio-group input[type="radio"] {
+      width: auto;
+      margin: 0 5px 0 0;
+    }
+    
+    /* Style pour les éléments modifiables dans la liste */
+    .editable-item {
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 10px;
+    }
+    
+    .edit-form {
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      padding: 15px;
+      margin-top: 10px;
+      display: none;
     }
     
     #fileStatus {
@@ -299,6 +340,119 @@
       font-style: italic;
     }
     
+    /* === ÉCRAN DE CONNEXION === */
+    .login-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100vh;
+      background: #ffffff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+    
+    .login-card {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      padding: 40px;
+      border-radius: 15px;
+      box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+      text-align: center;
+      max-width: 400px;
+      width: 90%;
+      margin: 20px;
+      border: 2px solid #5a67d8;
+      animation: cardAppear 0.4s ease-out;
+    }
+    
+    .login-card h2 {
+      margin: 0 0 15px 0;
+      color: white;
+      font-size: 1.5em;
+      font-weight: 600;
+    }
+    
+    .login-card p {
+      color: rgba(255, 255, 255, 0.9);
+      margin-bottom: 30px;
+      font-size: 1em;
+      line-height: 1.4;
+    }
+    
+    .login-form input[type="password"] {
+      width: 100%;
+      padding: 15px;
+      margin: 15px 0;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 10px;
+      font-size: 16px;
+      text-align: center;
+      transition: all 0.3s ease;
+      background: rgba(255, 255, 255, 0.9);
+      color: #333;
+    }
+    
+    .login-form input[type="password"]:focus {
+      border-color: white;
+      outline: none;
+      background: white;
+      box-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+    }
+    
+    .login-form button {
+      width: 100%;
+      padding: 15px;
+      background: white;
+      border: 2px solid white;
+      color: #667eea;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      margin-top: 10px;
+    }
+    
+    .login-form button:hover {
+      background: rgba(255, 255, 255, 0.9);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(255, 255, 255, 0.3);
+    }
+    
+    .login-form button:active {
+      transform: translateY(0);
+    }
+    
+    .login-error {
+      color: #fff;
+      background: rgba(231, 76, 60, 0.8);
+      font-size: 0.9em;
+      margin-top: 15px;
+      min-height: 20px;
+      padding: 12px;
+      border-radius: 8px;
+      border: 2px solid #e74c3c;
+    }
+    
+    @keyframes cardAppear {
+      from {
+        opacity: 0;
+        transform: translateY(-30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-10px); }
+      75% { transform: translateX(10px); }
+    }
+    
     @media (max-width: 768px) {
       .container {
         padding: 15px;
@@ -342,12 +496,63 @@
       .product-details {
         font-size: 0.8em;
       }
+      
+      .form-row {
+        flex-direction: column;
+        gap: 10px;
+      }
+      
+      .form-group {
+        min-width: auto;
+      }
+      
+      .radio-group {
+        flex-direction: column;
+        gap: 10px;
+      }
+      
+      .export-buttons {
+        flex-direction: column;
+      }
+      
+      .export-buttons button {
+        min-width: auto;
+      }
+      
+      /* Login responsive */
+      .login-card {
+        padding: 30px 25px;
+        margin: 15px;
+        max-width: 350px;
+      }
+      
+      .login-card h2 {
+        font-size: 1.3em;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>📱 Scanner EAN Mobile</h1>
+  <!-- Zone de connexion -->
+  <div id="loginModal" class="login-modal">
+    <div class="login-card">
+      <h2>🔐 Authentification</h2>
+      <p>Entrez le mot de passe pour continuer</p>
+      
+      <div class="login-form">
+        <input type="password" id="passwordInput" placeholder="Mot de passe" />
+        <button onclick="checkPassword()">🔑 Valider</button>
+        <div id="loginError" class="login-error"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Application principale -->
+  <div id="mainApp" class="container">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+      <h1>📱 EAN Follow-up samples</h1>
+      <button onclick="logout()" id="logoutBtn" style="background: #dc3545; padding: 8px 12px; font-size: 12px; display: none;">🚪 Déconnexion</button>
+    </div>
 
     <div class="section">
       <h3>1️⃣ Charger la base de données</h3>
@@ -361,6 +566,9 @@
 
     <div class="section">
       <h3>2️⃣ Scanner un code-barres</h3>
+      
+      <!-- NOUVEAU: Statut du scanner -->
+      <div id="scannerStatus" class="scanner-status" style="display: none;"></div>
       
       <div class="button-row">
         <button id="scanButton" onclick="startCamera()">📷 Scanner en direct</button>
@@ -395,27 +603,402 @@
 
     <div id="results" style="display:none;"></div>
 
+    <!-- Formulaire d'ajout d'informations -->
+    <div id="addInfoForm">
+      <h3 style="margin-top: 0; color: #667eea;">📝 Informations complémentaires</h3>
+      
+      <div class="form-row">
+        <div class="form-group">
+          <label for="fournisseur">🏪 Fournisseur (8 car. max)</label>
+          <input type="text" id="fournisseur" maxlength="8" placeholder="Ex: SUP12345">
+        </div>
+        
+        <div class="form-group">
+          <label for="styliste">👤 Styliste</label>
+          <select id="styliste">
+            <option value="">-- Sélectionner --</option>
+            <option value="Anais">Anais</option>
+            <option value="Clementine">Clementine</option>
+            <option value="Delphine">Delphine</option>
+            <option value="Fred">Fred</option>
+            <option value="Gaelle">Gaelle</option>
+            <option value="Meixuan">Meixuan</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="form-row">
+        <div class="form-group">
+          <label for="penderieStyle">👗 Penderie Style</label>
+          <select id="penderieStyle">
+            <option value="">-- Sélectionner --</option>
+            <option value="Oui">Oui</option>
+            <option value="A envoyer à Paris">A envoyer à Paris</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label for="shootingPhotos">📸 Shooting Photos</label>
+          <select id="shootingPhotos">
+            <option value="">-- Sélectionner --</option>
+            <option value="Oui">Oui</option>
+            <option value="Non">Non</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="form-row">
+        <div class="form-group">
+          <label for="showroom">🏢 Showroom</label>
+          <textarea id="showroom" placeholder="Informations showroom..."></textarea>
+        </div>
+      </div>
+      
+      <div class="form-row">
+        <div class="form-group">
+          <label for="aGarder">💾 A garder</label>
+          <textarea id="aGarder" placeholder="Informations à garder..."></textarea>
+        </div>
+        
+        <div class="form-group">
+          <label for="auber">📍 Auber</label>
+          <textarea id="auber" placeholder="Informations Auber..."></textarea>
+        </div>
+      </div>
+      
+      <div class="button-row">
+        <button onclick="addToListWithInfo()" style="background: #28a745;">✅ Ajouter à la liste</button>
+        <button onclick="cancelAddInfo()" style="background: #dc3545;">❌ Annuler</button>
+      </div>
+    </div>
+
     <div class="section">
       <h3>📋 Références sélectionnées</h3>
       <div id="selectedList">Aucune référence sélectionnée</div>
-      <div class="button-row">
+      <div class="export-buttons">
         <button onclick="exportPDF()">📄 Exporter PDF</button>
+        <button onclick="exportExcel()">📊 Exporter Excel</button>
         <button onclick="clearList()" style="background: #dc3545;">🗑️ Vider la liste</button>
       </div>
     </div>
   </div>
 
   <script>
+    // === GESTION DE L'AUTHENTIFICATION ===
+    
+    const MASTER_PASSWORD = "262626";
+    
+    function checkPassword() {
+      const enteredPassword = document.getElementById('passwordInput').value;
+      const errorDiv = document.getElementById('loginError');
+      
+      if (enteredPassword === MASTER_PASSWORD) {
+        sessionStorage.setItem('authenticated', 'true');
+        document.getElementById('loginModal').style.display = 'none';
+        document.getElementById('logoutBtn').style.display = 'inline-block';
+        errorDiv.textContent = '';
+        
+      } else {
+        errorDiv.textContent = '❌ Mot de passe incorrect';
+        document.getElementById('passwordInput').value = '';
+        document.getElementById('passwordInput').focus();
+        
+        document.getElementById('passwordInput').style.animation = 'shake 0.5s ease-in-out';
+        setTimeout(() => {
+          document.getElementById('passwordInput').style.animation = '';
+        }, 500);
+      }
+    }
+    
+    function logout() {
+      if (confirm('🚪 Êtes-vous sûr de vouloir vous déconnecter ?')) {
+        sessionStorage.removeItem('authenticated');
+        document.getElementById('loginModal').style.display = 'flex';
+        document.getElementById('logoutBtn').style.display = 'none';
+        document.getElementById('passwordInput').value = '';
+        setTimeout(() => {
+          document.getElementById('passwordInput').focus();
+        }, 300);
+      }
+    }
+    
+    window.addEventListener('DOMContentLoaded', function() {
+      const isAuthenticated = sessionStorage.getItem('authenticated');
+      if (isAuthenticated === 'true') {
+        document.getElementById('loginModal').style.display = 'none';
+        document.getElementById('logoutBtn').style.display = 'inline-block';
+      } else {
+        document.getElementById('loginModal').style.display = 'flex';
+        document.getElementById('logoutBtn').style.display = 'none';
+        setTimeout(() => {
+          document.getElementById('passwordInput').focus();
+        }, 500);
+      }
+    });
+    
+    document.addEventListener('DOMContentLoaded', function() {
+      const passwordInput = document.getElementById('passwordInput');
+      if (passwordInput) {
+        passwordInput.addEventListener('keypress', function(e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            checkPassword();
+          }
+        });
+      }
+    });
+
+    // === VARIABLES DE L'APPLICATION ===
     let database = [];
     let selectedItems = [];
+    let currentProductToAdd = null;
+    
+    // NOUVEAU: Variables pour le scanner
+    let codeReader = null;
+    let isScanning = false;
+    let currentStream = null;
 
+    // Zone Configurable
     const COL_REF = 0;
     const COL_CODE = 1;
     const COL_COULEUR = 2;
-    const COL_TAILLE = 4;
-    const COL_MARQUE = 7;
-    const COL_EAN = 10;
+    const COL_TAILLE = 3;
+    const COL_MARQUE = 4;
+    const COL_EAN = 5;
 
+    // === CORRECTION 2: Nouvelles fonctions du scanner ===
+    
+    function showScannerStatus(message, type = 'info') {
+      const statusDiv = document.getElementById('scannerStatus');
+      statusDiv.style.display = 'block';
+      statusDiv.textContent = message;
+      statusDiv.className = `scanner-status ${type}`;
+      
+      if (type === 'success' || type === 'error') {
+        setTimeout(() => {
+          statusDiv.style.display = 'none';
+        }, 5000);
+      }
+    }
+
+    function checkCameraSupport() {
+      // Vérifier si on est en HTTPS ou localhost
+      const isSecureContext = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+      
+      if (!isSecureContext) {
+        showScannerStatus('❌ HTTPS requis pour utiliser la caméra', 'error');
+        return false;
+      }
+
+      // Vérifier le support MediaDevices
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showScannerStatus('❌ Caméra non supportée par ce navigateur', 'error');
+        return false;
+      }
+
+      // Vérifier ZXing
+      if (!window.ZXing) {
+        showScannerStatus('❌ Bibliothèque de scan non chargée', 'error');
+        return false;
+      }
+
+      return true;
+    }
+
+    async function startCamera() {
+      console.log('🎥 Démarrage de la caméra...');
+      
+      if (!checkCameraSupport()) {
+        return;
+      }
+
+      const video = document.getElementById('video');
+      const scanButton = document.getElementById('scanButton');
+      const stopButton = document.getElementById('stopButton');
+      
+      try {
+        // Désactiver le bouton pendant l'initialisation
+        scanButton.disabled = true;
+        showScannerStatus('📷 Initialisation de la caméra...', 'info');
+        
+        // Arrêter toute session précédente
+        await stopCamera();
+        
+        // CORRECTION 3: Contraintes simplifiées pour mobile
+        const constraints = {
+          video: {
+            facingMode: { ideal: 'environment' }, // Préférer la caméra arrière mais fallback sur avant
+            width: { ideal: 1280, max: 1920 },
+            height: { ideal: 720, max: 1080 }
+          }
+        };
+        
+        // Obtenir le stream
+        console.log('📱 Demande d\'accès à la caméra avec contraintes:', constraints);
+        currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+        
+        // Assigner le stream à la vidéo
+        video.srcObject = currentStream;
+        await video.play();
+        
+        console.log('✅ Caméra démarrée, initialisation du scanner...');
+        
+        // CORRECTION 4: Initialisation ZXing avec gestion d'erreur améliorée
+        try {
+          codeReader = new window.ZXing.BrowserMultiFormatReader();
+          
+          // Configuration du scanner
+          const hints = new Map();
+          hints.set(window.ZXing.DecodeHintType.TRY_HARDER, true);
+          hints.set(window.ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+            window.ZXing.BarcodeFormat.EAN_13,
+            window.ZXing.BarcodeFormat.EAN_8,
+            window.ZXing.BarcodeFormat.CODE_128,
+            window.ZXing.BarcodeFormat.CODE_39
+          ]);
+          
+          codeReader.setHints(hints);
+          
+          isScanning = true;
+          
+          // Démarrer le scan en continu
+          const startScan = async () => {
+            while (isScanning && currentStream) {
+              try {
+                const result = await codeReader.decodeOnceFromVideoDevice(undefined, video);
+                if (result && isScanning) {
+                  console.log('✅ Code-barres détecté:', result.text);
+                  document.getElementById("barcodeInput").value = result.text;
+                  
+                  await stopCamera();
+                  findProduct();
+                  
+                  // Feedback haptique
+                  if (navigator.vibrate) {
+                    navigator.vibrate([200, 100, 200]);
+                  }
+                  
+                  showScannerStatus('✅ Code-barres détecté !', 'success');
+                  break;
+                }
+              } catch (scanError) {
+                // Erreurs de scan normales (pas de code trouvé)
+                if (!scanError.message.includes('NotFoundException')) {
+                  console.warn('Erreur de scan:', scanError);
+                }
+              }
+              
+              // Pause courte pour éviter de surcharger le CPU
+              await new Promise(resolve => setTimeout(resolve, 100));
+            }
+          };
+          
+          startScan().catch(console.error);
+          
+          // Interface
+          video.style.display = 'block';
+          scanButton.style.display = 'none';
+          stopButton.style.display = 'inline-block';
+          document.getElementById('scannerContainer').style.display = 'block';
+          
+          showScannerStatus('📷 Scanner actif - Placez le code-barres devant la caméra', 'success');
+          
+        } catch (zxingError) {
+          console.error('Erreur ZXing:', zxingError);
+          showScannerStatus('❌ Erreur d\'initialisation du scanner', 'error');
+          await stopCamera();
+        }
+        
+      } catch (error) {
+        console.error('Erreur caméra:', error);
+        
+        let errorMessage = '❌ Impossible d\'accéder à la caméra';
+        
+        if (error.name === 'NotAllowedError') {
+          errorMessage = '❌ Permission caméra refusée - Vérifiez les paramètres de votre navigateur';
+        } else if (error.name === 'NotFoundError') {
+          errorMessage = '❌ Aucune caméra trouvée';
+        } else if (error.name === 'NotReadableError') {
+          errorMessage = '❌ Caméra utilisée par une autre application';
+        }
+        
+        showScannerStatus(errorMessage, 'error');
+        await stopCamera();
+        
+      } finally {
+        scanButton.disabled = false;
+      }
+    }
+
+    async function stopCamera() {
+      console.log('🛑 Arrêt de la caméra...');
+      
+      isScanning = false;
+      
+      // Arrêter le stream
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => {
+          track.stop();
+          console.log('🔴 Track arrêté:', track.kind);
+        });
+        currentStream = null;
+      }
+      
+      // Nettoyer ZXing
+      if (codeReader) {
+        try {
+          codeReader.reset();
+        } catch (e) {
+          console.log('Erreur lors de l\'arrêt du scanner:', e);
+        }
+        codeReader = null;
+      }
+      
+      // Réinitialiser l'interface
+      const video = document.getElementById('video');
+      video.srcObject = null;
+      video.style.display = 'none';
+      
+      document.getElementById('scanButton').style.display = 'inline-block';
+      document.getElementById('stopButton').style.display = 'none';
+      document.getElementById('scannerContainer').style.display = 'none';
+      
+      const statusDiv = document.getElementById('scannerStatus');
+      if (statusDiv.textContent.includes('Scanner actif')) {
+        statusDiv.style.display = 'none';
+      }
+    }
+
+    // CORRECTION 5: Test de diagnostic
+    function testCameraAccess() {
+      console.log('🔍 Test de diagnostic caméra...');
+      
+      navigator.mediaDevices.enumerateDevices()
+        .then(devices => {
+          const cameras = devices.filter(device => device.kind === 'videoinput');
+          console.log('📷 Caméras disponibles:', cameras.length);
+          cameras.forEach((camera, index) => {
+            console.log(`  ${index + 1}. ${camera.label || 'Caméra ' + (index + 1)}`);
+          });
+          
+          if (cameras.length === 0) {
+            showScannerStatus('❌ Aucune caméra détectée', 'error');
+          }
+        })
+        .catch(error => {
+          console.error('Erreur énumération devices:', error);
+        });
+    }
+
+    // Appeler le test au chargement (seulement pour debug)
+    window.addEventListener('load', () => {
+      if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+        testCameraAccess();
+      }
+    });
+
+    // === RESTE DU CODE ORIGINAL (inchangé) ===
+    
     function loadCSV() {
       const file = document.getElementById('csvFile').files[0];
       if (!file) return alert("⚠️ Sélectionnez un fichier CSV.");
@@ -439,16 +1022,10 @@
     function loadOnlineCSV() {
       document.getElementById("fileStatus").innerHTML = "⏳ Chargement de la base de données en ligne...";
       
-      // URLs corrigées pour la branche gh-pages
       const alternativeUrls = [
-        // 1. JSDelivr CDN avec branche gh-pages
-        'https://cdn.jsdelivr.net/gh/rbmfinance1/26002@gh-pages/bdd.csv',
-        
-        // 2. GitHub Raw avec branche gh-pages
-        'https://raw.githubusercontent.com/rbmfinance1/26002/gh-pages/bdd.csv',
-        
-        // 3. URL originale GitHub Pages (qui fonctionne pour le téléchargement)
-        'https://rbmfinance1.github.io/26002/bdd.csv'
+        'https://cdn.jsdelivr.net/gh/rbmfinance1/26003@gh-pages/bdd.csv',
+        'https://raw.githubusercontent.com/rbmfinance1/26003/gh-pages/bdd.csv',
+        'https://rbmfinance1.github.io/26003/bdd.csv'
       ];
       
       async function tryUrls(urlIndex = 0) {
@@ -477,7 +1054,6 @@
           
           const csvData = await response.text();
           
-          // Vérifier que c'est bien du CSV
           if (csvData.includes('<!DOCTYPE') || csvData.includes('<html>')) {
             throw new Error('Contenu HTML reçu au lieu de CSV');
           }
@@ -491,12 +1067,10 @@
           
         } catch (error) {
           console.log(`Source ${urlIndex + 1} échouée:`, error.message);
-          // Essayer la source suivante
           tryUrls(urlIndex + 1);
         }
       }
       
-      // Commencer par la première source
       tryUrls(0);
     }
 
@@ -505,7 +1079,7 @@
         `<div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 8px; margin: 10px 0;">
           <strong>📥 Téléchargement manuel requis</strong><br/><br/>
           <div style="margin: 10px 0;">
-            <a href="https://rbmfinance1.github.io/26002/bdd.csv" 
+            <a href="https://rbmfinance1.github.io/26003/bdd.csv" 
                download="bdd.csv" 
                style="background: #007bff; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 5px 0;">
               📥 Télécharger bdd.csv
@@ -563,6 +1137,7 @@
       const rd = document.getElementById("results");
 
       if (result) {
+        currentProductToAdd = result;
         rd.style.display = "block";
         rd.innerHTML = `
           <div class="item">
@@ -573,7 +1148,7 @@
             <strong>Couleur :</strong> ${result[COL_COULEUR] || 'N/A'}<br/>
             <strong>Taille :</strong> ${result[COL_TAILLE] || 'N/A'}<br/>
             <strong>EAN :</strong> ${result[COL_EAN] || 'N/A'}<br/><br/>
-            <button onclick='addToList(${JSON.stringify(result).replace(/'/g, "&#39;").replace(/"/g, "&quot;")})'>➕ Ajouter à la liste</button>
+            <button onclick="showAddInfoForm()">➕ Ajouter à la liste</button>
           </div>`;
       } else {
         rd.style.display = "block";
@@ -586,32 +1161,73 @@
           </div>`;
       }
       
-      // Faire défiler vers les résultats
       rd.scrollIntoView({ behavior: 'smooth' });
     }
 
-    function addToList(item) {
-      // Vérifier si l'item existe déjà
-      const exists = selectedItems.some(existing => existing[COL_EAN] === item[COL_EAN]);
+    function showAddInfoForm() {
+      document.getElementById('addInfoForm').style.display = 'block';
+      resetAddInfoForm();
+      document.getElementById('addInfoForm').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function resetAddInfoForm() {
+      document.getElementById('fournisseur').value = '';
+      document.getElementById('styliste').value = '';
+      document.getElementById('penderieStyle').value = '';
+      document.getElementById('shootingPhotos').value = '';
+      document.getElementById('showroom').value = '';
+      document.getElementById('aGarder').value = '';
+      document.getElementById('auber').value = '';
+    }
+
+    function addToListWithInfo() {
+      if (!currentProductToAdd) {
+        alert("⚠️ Aucun produit sélectionné");
+        return;
+      }
+
+      const exists = selectedItems.some(existing => existing.product[COL_EAN] === currentProductToAdd[COL_EAN]);
       
       if (exists) {
         alert("⚠️ Cet article est déjà dans la liste");
         return;
       }
-      
-      selectedItems.push(item);
+
+      const itemWithInfo = {
+        product: currentProductToAdd,
+        additionalInfo: {
+          fournisseur: document.getElementById('fournisseur').value,
+          styliste: document.getElementById('styliste').value,
+          penderieStyle: document.getElementById('penderieStyle').value,
+          shootingPhotos: document.getElementById('shootingPhotos').value,
+          showroom: document.getElementById('showroom').value,
+          aGarder: document.getElementById('aGarder').value,
+          auber: document.getElementById('auber').value
+        }
+      };
+
+      selectedItems.push(itemWithInfo);
       updateSelectedList();
       
-      // Feedback visuel
+      document.getElementById('addInfoForm').style.display = 'none';
+      document.getElementById("results").style.display = "none";
+      
+      document.getElementById("barcodeInput").value = "";
+      currentProductToAdd = null;
+      
       if (navigator.vibrate) {
         navigator.vibrate(100);
       }
       
-      // Vider le champ de saisie et masquer les résultats pour préparer le prochain scan
-      document.getElementById("barcodeInput").value = "";
-      document.getElementById("results").style.display = "none";
-      
-      // Afficher un message de confirmation avec option de nouveau scan
+      showConfirmationMessage();
+    }
+
+    function cancelAddInfo() {
+      document.getElementById('addInfoForm').style.display = 'none';
+      currentProductToAdd = null;
+    }
+
+    function showConfirmationMessage() {
       const confirmDiv = document.createElement('div');
       confirmDiv.innerHTML = `
         <div style="background: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 10px; border-radius: 5px; margin: 10px 0; text-align: center;">
@@ -621,11 +1237,9 @@
         </div>
       `;
       
-      // Insérer le message après la section de scan
       const scanSection = document.querySelector('.section:nth-child(2)');
       scanSection.parentNode.insertBefore(confirmDiv, scanSection.nextSibling);
       
-      // Supprimer automatiquement le message après 5 secondes
       setTimeout(() => {
         if (confirmDiv.parentNode) {
           confirmDiv.remove();
@@ -641,14 +1255,112 @@
         return;
       }
       
-      listContainer.innerHTML = selectedItems.map((el, index) =>
-        `<div class="item">
-          <strong>${el[COL_REF] || 'N/A'}</strong> – ${el[COL_CODE] || 'N/A'}<br/>
-          Taille: ${el[COL_TAILLE] || 'N/A'} | Marque: ${el[COL_MARQUE] || 'N/A'}<br/>
-          <small>EAN: ${el[COL_EAN] || 'N/A'}</small>
-          <button onclick="removeFromList(${index})" style="background: #dc3545; padding: 5px 10px; font-size: 12px;">🗑️ Supprimer</button>
+      listContainer.innerHTML = selectedItems.map((item, index) =>
+        `<div class="editable-item">
+          <div>
+            <strong>${item.product[COL_REF] || 'N/A'}</strong> – ${item.product[COL_CODE] || 'N/A'}<br/>
+            Taille: ${item.product[COL_TAILLE] || 'N/A'} | Marque: ${item.product[COL_MARQUE] || 'N/A'} | Couleur: ${item.product[COL_COULEUR] || 'N/A'}<br/>
+            <small>EAN: ${item.product[COL_EAN] || 'N/A'}</small><br/>
+            
+            <div style="margin-top: 10px; color: #666;">
+              ${item.additionalInfo.fournisseur ? `<strong>Fournisseur:</strong> ${item.additionalInfo.fournisseur}<br/>` : ''}
+              ${item.additionalInfo.styliste ? `<strong>Styliste:</strong> ${item.additionalInfo.styliste}<br/>` : ''}
+              ${item.additionalInfo.penderieStyle ? `<strong>Penderie Style:</strong> ${item.additionalInfo.penderieStyle}<br/>` : ''}
+              ${item.additionalInfo.shootingPhotos ? `<strong>Shooting Photos:</strong> ${item.additionalInfo.shootingPhotos}<br/>` : ''}
+              ${item.additionalInfo.showroom ? `<strong>Showroom:</strong> ${item.additionalInfo.showroom}<br/>` : ''}
+              ${item.additionalInfo.aGarder ? `<strong>A garder:</strong> ${item.additionalInfo.aGarder}<br/>` : ''}
+              ${item.additionalInfo.auber ? `<strong>Auber:</strong> ${item.additionalInfo.auber}<br/>` : ''}
+            </div>
+            
+            <div style="margin-top: 10px;">
+              <button onclick="editItem(${index})" style="background: #ffc107; color: #000; padding: 5px 10px; font-size: 12px;">✏️ Modifier</button>
+              <button onclick="removeFromList(${index})" style="background: #dc3545; padding: 5px 10px; font-size: 12px;">🗑️ Supprimer</button>
+            </div>
+          </div>
+          
+          <div id="editForm${index}" class="edit-form">
+            <h4>Modifier les informations</h4>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Fournisseur</label>
+                <input type="text" id="editFournisseur${index}" value="${item.additionalInfo.fournisseur}" maxlength="8">
+              </div>
+              <div class="form-group">
+                <label>Styliste</label>
+                <select id="editStyliste${index}">
+                  <option value="">-- Sélectionner --</option>
+                  <option value="Gaelle" ${item.additionalInfo.styliste === 'Gaelle' ? 'selected' : ''}>Gaelle</option>
+                  <option value="Fred" ${item.additionalInfo.styliste === 'Fred' ? 'selected' : ''}>Fred</option>
+                  <option value="Clementine" ${item.additionalInfo.styliste === 'Clementine' ? 'selected' : ''}>Clementine</option>
+                  <option value="Guillaume" ${item.additionalInfo.styliste === 'Guillaume' ? 'selected' : ''}>Guillaume</option>
+                  <option value="Meixuan" ${item.additionalInfo.styliste === 'Meixuan' ? 'selected' : ''}>Meixuan</option>
+                  <option value="Anais" ${item.additionalInfo.styliste === 'Anais' ? 'selected' : ''}>Anais</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Penderie Style</label>
+                <select id="editPenderieStyle${index}">
+                  <option value="">-- Sélectionner --</option>
+                  <option value="Oui" ${item.additionalInfo.penderieStyle === 'Oui' ? 'selected' : ''}>Oui</option>
+                  <option value="A envoyer à Paris" ${item.additionalInfo.penderieStyle === 'A envoyer à Paris' ? 'selected' : ''}>A envoyer à Paris</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Shooting Photos</label>
+                <select id="editShootingPhotos${index}">
+                  <option value="">-- Sélectionner --</option>
+                  <option value="Oui" ${item.additionalInfo.shootingPhotos === 'Oui' ? 'selected' : ''}>Oui</option>
+                  <option value="Non" ${item.additionalInfo.shootingPhotos === 'Non' ? 'selected' : ''}>Non</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Showroom</label>
+                <textarea id="editShowroom${index}">${item.additionalInfo.showroom}</textarea>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>A garder</label>
+                <textarea id="editAGarder${index}">${item.additionalInfo.aGarder}</textarea>
+              </div>
+              <div class="form-group">
+                <label>Auber</label>
+                <textarea id="editAuber${index}">${item.additionalInfo.auber}</textarea>
+              </div>
+            </div>
+            <div class="button-row">
+              <button onclick="saveEdit(${index})" style="background: #28a745;">💾 Sauvegarder</button>
+              <button onclick="cancelEdit(${index})" style="background: #6c757d;">❌ Annuler</button>
+            </div>
+          </div>
         </div>`
       ).join("");
+    }
+
+    function editItem(index) {
+      document.getElementById(`editForm${index}`).style.display = 'block';
+    }
+
+    function cancelEdit(index) {
+      document.getElementById(`editForm${index}`).style.display = 'none';
+    }
+
+    function saveEdit(index) {
+      selectedItems[index].additionalInfo = {
+        fournisseur: document.getElementById(`editFournisseur${index}`).value,
+        styliste: document.getElementById(`editStyliste${index}`).value,
+        penderieStyle: document.getElementById(`editPenderieStyle${index}`).value,
+        shootingPhotos: document.getElementById(`editShootingPhotos${index}`).value,
+        showroom: document.getElementById(`editShowroom${index}`).value,
+        aGarder: document.getElementById(`editAGarder${index}`).value,
+        auber: document.getElementById(`editAuber${index}`).value
+      };
+      
+      updateSelectedList();
     }
 
     function removeFromList(index) {
@@ -675,10 +1387,8 @@
       document.getElementById('searchInput').value = '';
       displayProducts(database);
       
-      // Faire défiler vers la liste
       document.getElementById('productListContainer').scrollIntoView({ behavior: 'smooth' });
       
-      // Focus sur le champ de recherche
       setTimeout(() => {
         document.getElementById('searchInput').focus();
       }, 300);
@@ -742,7 +1452,8 @@
       const selectedItem = database[index];
       hideProductList();
       
-      // Afficher le produit sélectionné comme si on l'avait trouvé par EAN
+      currentProductToAdd = selectedItem;
+      
       const rd = document.getElementById("results");
       rd.style.display = "block";
       rd.innerHTML = `
@@ -754,16 +1465,13 @@
           <strong>Couleur :</strong> ${selectedItem[COL_COULEUR] || 'N/A'}<br/>
           <strong>Taille :</strong> ${selectedItem[COL_TAILLE] || 'N/A'}<br/>
           <strong>EAN :</strong> ${selectedItem[COL_EAN] || 'N/A'}<br/><br/>
-          <button onclick='addToList(${JSON.stringify(selectedItem).replace(/'/g, "&#39;").replace(/"/g, "&quot;")})'>➕ Ajouter à la liste</button>
+          <button onclick="showAddInfoForm()">➕ Ajouter à la liste</button>
         </div>`;
       
-      // Remplir aussi le champ EAN pour cohérence
       document.getElementById("barcodeInput").value = selectedItem[COL_EAN] || '';
       
-      // Faire défiler vers les résultats
       rd.scrollIntoView({ behavior: 'smooth' });
       
-      // Vibration si supportée
       if (navigator.vibrate) {
         navigator.vibrate(100);
       }
@@ -788,7 +1496,6 @@
       const marginLeft = 20;
       let y = 30;
 
-      // En-tête
       doc.setFontSize(10);
       doc.text(`Date : ${timestamp}`, 10, 10);
       doc.text(`Nombre d'articles : ${selectedItems.length}`, 10, 15);
@@ -796,13 +1503,11 @@
       doc.setFontSize(16);
       doc.text("Liste de colisage", marginLeft, 25);
 
-      // Contenu
       doc.setFontSize(10);
       selectedItems.forEach((item, i) => {
-        const text = `${i + 1}. ${item[COL_REF]} | ${item[COL_CODE]} | Taille: ${item[COL_TAILLE]} | Marque: ${item[COL_MARQUE]}`;
+        const text = `${i + 1}. ${item.product[COL_REF]} | ${item.product[COL_CODE]} | Taille: ${item.product[COL_TAILLE]} | Marque: ${item.product[COL_MARQUE]}`;
         const lines = doc.splitTextToSize(text, 170);
         
-        // Nouvelle page si nécessaire
         if (y + (lines.length * 5) > 270) {
           doc.addPage();
           y = 20;
@@ -813,6 +1518,40 @@
       });
 
       doc.save(`colisage_${new Date().toISOString().slice(0,10)}.pdf`);
+    }
+
+    function exportExcel() {
+      if (selectedItems.length === 0) {
+        alert("⚠️ Aucune référence à exporter");
+        return;
+      }
+
+      const excelData = selectedItems.map(item => ({
+        'Code Article': item.product[COL_CODE] || '',
+        'Référence': item.product[COL_REF] || '',
+        'Couleur': item.product[COL_COULEUR] || '',
+        'Taille': item.product[COL_TAILLE] || '',
+        'Fournisseur': item.additionalInfo.fournisseur || '',
+        'Styliste': item.additionalInfo.styliste || '',
+        'Penderie Style': item.additionalInfo.penderieStyle || '',
+        'Shooting Photos': item.additionalInfo.shootingPhotos || '',
+        'Showroom': item.additionalInfo.showroom || '',
+        'A garder': item.additionalInfo.aGarder || '',
+        'Auber': item.additionalInfo.auber || ''
+      }));
+
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(excelData);
+
+      const colWidths = [
+        { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 8 }, { wch: 12 }, { wch: 12 },
+        { wch: 18 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 20 }
+      ];
+      ws['!cols'] = colWidths;
+
+      XLSX.utils.book_append_sheet(wb, ws, "Colisage");
+
+      XLSX.writeFile(wb, `colisage_${new Date().toISOString().slice(0,10)}.xlsx`);
     }
 
     // Gérer la saisie manuelle avec Enter
@@ -837,6 +1576,10 @@
       }
       lastTouchEnd = now;
     }, false);
+
+    // NOUVEAU: Nettoyage automatique à la fermeture de la page
+    window.addEventListener('beforeunload', stopCamera);
+    window.addEventListener('pagehide', stopCamera);
   </script>
 </body>
 </html>
