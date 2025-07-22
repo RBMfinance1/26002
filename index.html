@@ -1162,6 +1162,13 @@
               
               document.getElementById("barcodeInput").value = result.text;
               
+              // CORRECTION : arrêter le scan immédiatement
+              isScanning = false;
+              if (scanningInterval) {
+                clearInterval(scanningInterval);
+                scanningInterval = null;
+              }
+              
               // Attendre un peu pour montrer le succès
               setTimeout(async () => {
                 await stopCameraAfterScan();
