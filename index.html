@@ -1119,7 +1119,7 @@
       // Activer l'animation du cadre
       const scannerFrame = document.getElementById('scannerFrame');
       if (scannerFrame) {
-        scannerFrame.className = 'scanner-frame active';
+        scannerFrame.className = 'scanner-frame'; // Ne plus ajouter 'active' pour éviter le clignotement
       }
       
       // Méthode robuste de scan avec fallback
